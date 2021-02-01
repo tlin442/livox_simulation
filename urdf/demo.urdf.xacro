@@ -35,72 +35,8 @@
 
     <!-- /////////////////////////////////////////////////////////// -->
   
-    <link name="world"/>
-
-    <!-- base_link -->
-    <link name="base_link">
-        <visual>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <geometry>
-                <box size="0.1 0.1 0.04" />
-            </geometry>
-            <material name="Red" />
-        </visual>
-        <collision>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <geometry>
-                <box size="0.1 0.1 0.01" />
-            </geometry>
-        </collision>
-        <xacro:inertial_matrix mass="1"/>
-    </link>
-
-    <gazebo reference="base_link">
-        <material>Gazebo/Red</material>
-    </gazebo>
-
-    <joint name="fixed" type="fixed">
-        <parent link="world"/>
-        <child link="base_link"/>
-    </joint>
-
-    <joint name="joint1" type="fixed">
-        <parent link="base_link"/>
-        <child link="link1"/>
-        <origin xyz="0.1 0 0" rpy="0 0 0" />
-    </joint>
-
-    <!-- link 1 -->
-    <link name="link1" >
-        <visual>
-            <origin xyz="-${link1_len/2} 0 0" rpy="0 0 0" />
-            <geometry>
-                <cylinder radius="${link1_width}" length="${link1_len}"/>
-            </geometry>
-            <material name="Blue" />
-        </visual>
-        <collision>
-            <!-- Attention: the axis -->
-            <origin xyz="-${link1_len/2} 0 0" rpy="0 0 0" />
-            <geometry>
-                <cylinder radius="${link1_width}" length="${link1_len/2}"/>
-            </geometry>
-        </collision>
-        <xacro:inertial_matrix mass="1"/>
-    </link>
 
     <xacro:include filename="$(find livox_simulation)/urdf/livox_mid.urdf.xacro"/>
     <xacro:Livox_Mid40 name="livox"/>
-
-    <joint name="livox_base_joint" type="fixed">
-        <parent link="link1"/>
-        <child link="livox_base"/>
-        <origin rpy="0 0 -0.6"
-                xyz="-0.1 0 ${link1_len/2}"/>
-    </joint>
-
-    <gazebo reference="link1">
-        <material>Gazebo/Blue</material>
-    </gazebo>
 
 </robot>
