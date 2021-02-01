@@ -36,7 +36,7 @@ void ArtiGazeboLaserLivox::Load(sensors::SensorPtr _parent, sdf::ElementPtr _sdf
   this->parent_sensor_ = _parent;
   std::string worldName = _parent->WorldName();
   this->world_ = physics::get_world(worldName);
-  this->engine_ = this->world_->GetPhysicsEngine();
+  this->engine_ = this->world_->Physics();
   this->engine_->InitForThread();
   this->sdf = _sdf;
 
@@ -231,12 +231,15 @@ void ArtiGazeboLaserLivox::OnNewLaserScans()
 
     if (cur_time - this->last_update_time_ >= this->update_period_)
     {
+      ROS_INFO("Updating laser scan!");
       common::Time sensor_update_time = this->parent_sensor_->LastUpdateTime();
       // timeval dt;
       // dt.tv_sec = 1;
       // dt.tv_usec = 200;
       // sensor_update_time -= dt;
+      ROS_INFO("Start laser checks");
       this->PutLaserData(last_update_time_);
+      ROS_INFO("End laser checks");
       this->last_update_time_ = cur_time;
     }
   }
@@ -262,22 +265,24 @@ void ArtiGazeboLaserLivox::PutLaserData(common::Time &_updateTime)
   intensity.values.clear();
   intensity.name = "intensity";
 
-  math::Pose offset;
-  offset = this->collision_ptr_->GetRelativePose();
-  math::Vector3 offset_rot = offset.rot.GetAsEuler();
+  ignition::math::Pose3d offset;
+  offset = this->collision_ptr_->RelativePose();
+  ignition::math::Vector3d offset_rot = offset.Rot().Euler();
 
-  math::Quaternion rot_only;
+  ignition::math::Quaterniond rot_only;
   if (this->current_rot_angle_ + this->rotation_increment_ >= M_PI)
-    rot_only.SetFromEuler(math::Vector3(this->current_rot_angle_ + this->rotation_increment_ - M_PI + offset_rot.x,
-                                        offset_rot.y, offset_rot.z));
+    rot_only.Euler(ignition::math::Vector3d(this->current_rot_angle_ + this->rotation_increment_ - M_PI + offset_rot.X(),
+                                        offset_rot.Y(), offset_rot.Z()));
   else
-    rot_only.SetFromEuler(math::Vector3(this->current_rot_angle_ + this->rotation_increment_ + offset_rot.x,
-                                        offset_rot.y, offset_rot.z));
-  offset.rot = rot_only;
+    rot_only.Euler(ignition::math::Vector3d(this->current_rot_angle_ + this->rotation_increment_ + offset_rot.X(),
+                                        offset_rot.Y(), offset_rot.Z()));
+  offset.Rot() = rot_only;
+
+  //ROS_INFO("Got Offset!");
 
   bool has_prev_value = false;
- // ROS_ERROR_STREAM("num ellipses: " << this->double_ellipse_rays_.size());
-//  ROS_ERROR_STREAM("num ellipse rays: " << this->double_ellipse_rays_[0].getSizeLeftLowerQuadrant());
+  //ROS_ERROR_STREAM("num ellipses: " << this->double_ellipse_rays_.size());
+  //ROS_ERROR_STREAM("num ellipse rays: " << this->double_ellipse_rays_[0].getSizeLeftLowerQuadrant());
 
   sensor_msgs::ChannelFloat32 intensity1 = sensor_msgs::ChannelFloat32();
   intensity1.values.clear();
@@ -329,9 +334,9 @@ void ArtiGazeboLaserLivox::PutLaserData(common::Time &_updateTime)
     for(int c = 0; c < 4; c++)
     {
       geometry_msgs::Point32 point, rot_point;
-      math::Quaternion ray;
-      math::Vector3 axis;
-      math::Vector3 endpoint;
+      ignition::math::Quaterniond ray;
+      ignition::math::Vector3d axis;
+      ignition::math::Vector3d endpoint;
       for (int i = 0; i < quadrant_size[c]; i++)
       {
         float horizontal_ray_angle = horizon_angles[c][i];
@@ -359,17 +364,19 @@ void ArtiGazeboLaserLivox::PutLaserData(common::Time &_updateTime)
         else
           has_prev_value = false;
         
-        ray.SetFromEuler(math::Vector3(0.0, -vertical_ray_angle, horizontal_ray_angle));
-        // axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-        axis = ray * math::Vector3(1.0, 0.0, 0.0);
-        axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-        endpoint = (axis * this->max_range_) + offset.pos;
+        ray.Euler(ignition::math::Vector3d(0.0, -vertical_ray_angle, horizontal_ray_angle));
+        // axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+        // axis = ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+        axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+        endpoint = (axis * this->max_range_) + offset.Pos();
 
         quadrants[c][i]->SetPoints(this->ray_startpoint_, endpoint);
         quadrants[c][i]->Update();
       }
     }
   }
+
+  //ROS_INFO("Finished computing points");
   // Add intensity-field to the pointcloud
   this->cloud_msg_.channels.push_back(intensity);
 
@@ -429,15 +436,15 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
   double ell_a = 0.1746; // length of ellipse parameter a in a distance of 1 m with a FOV of 38.4°
   double ell_b = 0.0364; // length of ellipse parameter b in a distance of 1 m with a FOV of 38.4°
   double dx = 2.0 * ell_a / samples_a;
-  math::Quaternion ray;
-  math::Vector3 axis;
-  math::Pose offset;
-  math::Vector3 start, end1, end2, end3, end4;
+  ignition::math::Quaterniond ray;
+  ignition::math::Vector3d axis;
+  ignition::math::Pose3d offset;
+  ignition::math::Vector3d start, end1, end2, end3, end4;
   livox::RayData eight_ray_pattern;
 
-  start.x = 0.0;
-  start.y = 0.0;
-  start.z = 0.0;
+  start.X() = 0.0;
+  start.Y() = 0.0;
+  start.Z() = 0.0;
 
   std::string parent_name = this->parent_ray_sensor_->ParentName();
   this->collision_ptr_ = this->engine_->CreateCollision("ray", parent_name);
@@ -446,13 +453,13 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
   this->collision_ptr_->SetRelativePose(this->sensor_pose_);
   this->collision_ptr_->SetInitialRelativePose(this->sensor_pose_);
 
-  offset = this->collision_ptr_->GetRelativePose();
-  math::Vector3 offset_rot = offset.rot.GetAsEuler();
-  ray.SetFromEuler(math::Vector3(offset_rot.x, offset_rot.y, offset_rot.z));
-  axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+  offset = this->collision_ptr_->RelativePose();
+  ignition::math::Vector3d offset_rot = offset.Rot().Euler();
+  ray.Euler(ignition::math::Vector3d(offset_rot.X(), offset_rot.Y(), offset_rot.Z()));
+  axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 
   // Get the position of the pose of the parent_ray_sensor and add its position to the new ray (its relative to the parent-frame)
-  start = (axis * this->min_range_) + offset.pos;
+  start = (axis * this->min_range_) + offset.Pos();
   this->ray_startpoint_ = start;
 
 
@@ -529,58 +536,58 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
     //       Therefore we need to map the y-axis of the ellipse to the Ray-z-axis and the x-axis of the ellipse to the
     //       -Ray-y-axis.
 
-    end1.x = (1.0 + offset.pos.x);
-    end1.y = (-ell_x1 + offset.pos.y);
-    end1.z = (ell_y1 + offset.pos.z);
+    end1.X() = (1.0 + offset.Pos().X());
+    end1.Y() = (-ell_x1 + offset.Pos().Y());
+    end1.Z() = (ell_y1 + offset.Pos().Z());
 
-    end2.x = (1.0 + offset.pos.x);
-    end2.y = (-ell_x2 + offset.pos.y);
-    end2.z = (ell_y2 + offset.pos.z);
+    end2.X() = (1.0 + offset.Pos().X());
+    end2.Y() = (-ell_x2 + offset.Pos().Y());
+    end2.Z() = (ell_y2 + offset.Pos().Z());
 
-    end3.x = (1.0 + offset.pos.x);
-    end3.y = (-ell_x3 + offset.pos.y);
-    end3.z = (ell_y3 + offset.pos.z);
+    end3.X() = (1.0 + offset.Pos().X());
+    end3.Y() = (-ell_x3 + offset.Pos().Y());
+    end3.Z() = (ell_y3 + offset.Pos().Z());
 
-    end4.x = (1.0 + offset.pos.x);
-    end4.y = (-ell_x4 + offset.pos.y);
-    end4.z = (ell_y4 + offset.pos.z);
+    end4.X() = (1.0 + offset.Pos().X());
+    end4.Y() = (-ell_x4 + offset.Pos().Y());
+    end4.Z() = (ell_y4 + offset.Pos().Z());
 
-    double beta1 = (atan2(end1.y - start.y, end1.x - start.x));
-    double beta2 = (atan2(end2.y - start.y, end2.x - start.x));
-    double beta3 = (atan2(end3.y - start.y, end3.x - start.x));
-    double beta4 = (atan2(end4.y - start.y, end4.x - start.x));
-    double alpha1 = (atan2(end1.z - start.z, end1.x - start.x));
-    double alpha2 = (atan2(end2.z - start.z, end2.x - start.x));
-    double alpha3 = (atan2(end3.z - start.z, end3.x - start.x));
-    double alpha4 = (atan2(end4.z - start.z, end4.x - start.x));
+    double beta1 = (atan2(end1.Y() - start.Y(), end1.X() - start.X()));
+    double beta2 = (atan2(end2.Y() - start.Y(), end2.X() - start.X()));
+    double beta3 = (atan2(end3.Y() - start.Y(), end3.X() - start.X()));
+    double beta4 = (atan2(end4.Y() - start.Y(), end4.X() - start.X()));
+    double alpha1 = (atan2(end1.Z() - start.Z(), end1.X() - start.X()));
+    double alpha2 = (atan2(end2.Z() - start.Z(), end2.X() - start.X()));
+    double alpha3 = (atan2(end3.Z() - start.Z(), end3.X() - start.X()));
+    double alpha4 = (atan2(end4.Z() - start.Z(), end4.X() - start.X()));
 
-    end1.x = (1.0 + offset.pos.x) * this->max_range_;
-    end1.y = (-ell_x1 + offset.pos.y) * this->max_range_;
-    end1.z = (ell_y1 + offset.pos.z) * this->max_range_;
-    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
-    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-    end1 = (axis * this->max_range_) + offset.pos;
+    end1.X() = (1.0 + offset.Pos().X()) * this->max_range_;
+    end1.Y() = (-ell_x1 + offset.Pos().Y()) * this->max_range_;
+    end1.Z() = (ell_y1 + offset.Pos().Z()) * this->max_range_;
+    ray.Euler(ignition::math::Vector3d(0.0 + offset_rot.X(), -alpha1 + offset_rot.Y(), beta1 + offset_rot.Z()));
+    axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+    end1 = (axis * this->max_range_) + offset.Pos();
 
-    end2.x = (1.0 + offset.pos.x) * this->max_range_;
-    end2.y = (-ell_x2 + offset.pos.y) * this->max_range_;
-    end2.z = (ell_y2 + offset.pos.z) * this->max_range_;
-    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
-    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-    end2 = (axis * this->max_range_) + offset.pos;
+    end2.X() = (1.0 + offset.Pos().X()) * this->max_range_;
+    end2.Y() = (-ell_x2 + offset.Pos().Y()) * this->max_range_;
+    end2.Z() = (ell_y2 + offset.Pos().Z()) * this->max_range_;
+    ray.Euler(ignition::math::Vector3d(0.0 + offset_rot.X(), -alpha2 + offset_rot.Y(), beta2 + offset_rot.Z()));
+    axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+    end2 = (axis * this->max_range_) + offset.Pos();
 
-    end3.x = (1.0 + offset.pos.x) * this->max_range_;
-    end3.y = (-ell_x3 + offset.pos.y) * this->max_range_;
-    end3.z = (ell_y3 + offset.pos.z) * this->max_range_;
-    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
-    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-    end3 = (axis * this->max_range_) + offset.pos;
+    end3.X() = (1.0 + offset.Pos().X()) * this->max_range_;
+    end3.Y() = (-ell_x3 + offset.Pos().Y()) * this->max_range_;
+    end3.Z() = (ell_y3 + offset.Pos().Z()) * this->max_range_;
+    ray.Euler(ignition::math::Vector3d(0.0 + offset_rot.X(), -alpha3 + offset_rot.Y(), beta3 + offset_rot.Z()));
+    axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+    end3 = (axis * this->max_range_) + offset.Pos();
 
-    end4.x = (1.0 + offset.pos.x) * this->max_range_;
-    end4.y = (-ell_x4 + offset.pos.y) * this->max_range_;
-    end4.z = (ell_y4 + offset.pos.z) * this->max_range_;
-    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
-    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
-    end4 = (axis * this->max_range_) + offset.pos;
+    end4.X() = (1.0 + offset.Pos().X()) * this->max_range_;
+    end4.Y() = (-ell_x4 + offset.Pos().Y()) * this->max_range_;
+    end4.Z() = (ell_y4 + offset.Pos().Z()) * this->max_range_;
+    ray.Euler(ignition::math::Vector3d(0.0 + offset_rot.X(), -alpha4 + offset_rot.Y(), beta4 + offset_rot.Z()));
+    axis = offset.Rot() * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
+    end4 = (axis * this->max_range_) + offset.Pos();
 
     std::string parent_name = this->parent_ray_sensor_->ParentName();
     //this->parent_ray_sensor_->LaserShape()->shared_from_this();
@@ -756,21 +763,21 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    //       Therefore we need to map the y-axis of the ellipse to the Ray-z-axis and the x-axis of the ellipse to the
 //    //       -Ray-y-axis.
 //
-//    end1.x = (1.0 + offset.pos.x);
-//    end1.y = (-ell_x1 + offset.pos.y);
-//    end1.z = (ell_y1 + offset.pos.z);
+//    end1.x = (1.0 + offset.Pos().X());
+//    end1.y = (-ell_x1 + offset.Pos().Y());
+//    end1.z = (ell_y1 + offset.Pos().Z());
 //
-//    end2.x = (1.0 + offset.pos.x);
-//    end2.y = (-ell_x2 + offset.pos.y);
-//    end2.z = (ell_y2 + offset.pos.z);
+//    end2.x = (1.0 + offset.Pos().X());
+//    end2.y = (-ell_x2 + offset.Pos().Y());
+//    end2.z = (ell_y2 + offset.Pos().Z());
 //
-//    end3.x = (1.0 + offset.pos.x);
-//    end3.y = (-ell_x3 + offset.pos.y);
-//    end3.z = (ell_y3 + offset.pos.z);
+//    end3.x = (1.0 + offset.Pos().X());
+//    end3.y = (-ell_x3 + offset.Pos().Y());
+//    end3.z = (ell_y3 + offset.Pos().Z());
 //
-//    end4.x = (1.0 + offset.pos.x);
-//    end4.y = (-ell_x4 + offset.pos.y);
-//    end4.z = (ell_y4 + offset.pos.z);
+//    end4.x = (1.0 + offset.Pos().X());
+//    end4.y = (-ell_x4 + offset.Pos().Y());
+//    end4.z = (ell_y4 + offset.Pos().Z());
 //
 //  }
 //  std::cout << "Time 2: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - tstart).count() << " ms." << std::endl;
@@ -825,21 +832,21 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    //       Therefore we need to map the y-axis of the ellipse to the Ray-z-axis and the x-axis of the ellipse to the
 //    //       -Ray-y-axis.
 //
-//    end1.x = (1.0 + offset.pos.x);
-//    end1.y = (-ell_x1 + offset.pos.y);
-//    end1.z = (ell_y1 + offset.pos.z);
+//    end1.x = (1.0 + offset.Pos().X());
+//    end1.y = (-ell_x1 + offset.Pos().Y());
+//    end1.z = (ell_y1 + offset.Pos().Z());
 //
-//    end2.x = (1.0 + offset.pos.x);
-//    end2.y = (-ell_x2 + offset.pos.y);
-//    end2.z = (ell_y2 + offset.pos.z);
+//    end2.x = (1.0 + offset.Pos().X());
+//    end2.y = (-ell_x2 + offset.Pos().Y());
+//    end2.z = (ell_y2 + offset.Pos().Z());
 //
-//    end3.x = (1.0 + offset.pos.x);
-//    end3.y = (-ell_x3 + offset.pos.y);
-//    end3.z = (ell_y3 + offset.pos.z);
+//    end3.x = (1.0 + offset.Pos().X());
+//    end3.y = (-ell_x3 + offset.Pos().Y());
+//    end3.z = (ell_y3 + offset.Pos().Z());
 //
-//    end4.x = (1.0 + offset.pos.x);
-//    end4.y = (-ell_x4 + offset.pos.y);
-//    end4.z = (ell_y4 + offset.pos.z);
+//    end4.x = (1.0 + offset.Pos().X());
+//    end4.y = (-ell_x4 + offset.Pos().Y());
+//    end4.z = (ell_y4 + offset.Pos().Z());
 //    double beta1 = (atan2(end1.y - start.y, end1.x - start.x));
 //    double beta2 = (atan2(end2.y - start.y, end2.x - start.x));
 //    double beta3 = (atan2(end3.y - start.y, end3.x - start.x));
@@ -849,32 +856,32 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    double alpha3 = (atan2(end3.z - start.z, end3.x - start.x));
 //    double alpha4 = (atan2(end4.z - start.z, end4.x - start.x));
 //
-//    end1.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end1.y = (-ell_x1 + offset.pos.y) * this->max_range_;
-//    end1.z = (ell_y1 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end1.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end1.y = (-ell_x1 + offset.Pos().Y()) * this->max_range_;
+//    end1.z = (ell_y1 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end1 = (axis * this->max_range_) + offset.pos;
 //
-//    end2.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end2.y = (-ell_x2 + offset.pos.y) * this->max_range_;
-//    end2.z = (ell_y2 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end2.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end2.y = (-ell_x2 + offset.Pos().Y()) * this->max_range_;
+//    end2.z = (ell_y2 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end2 = (axis * this->max_range_) + offset.pos;
 //
-//    end3.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end3.y = (-ell_x3 + offset.pos.y) * this->max_range_;
-//    end3.z = (ell_y3 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end3.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end3.y = (-ell_x3 + offset.Pos().Y()) * this->max_range_;
+//    end3.z = (ell_y3 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end3 = (axis * this->max_range_) + offset.pos;
 //
-//    end4.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end4.y = (-ell_x4 + offset.pos.y) * this->max_range_;
-//    end4.z = (ell_y4 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end4.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end4.y = (-ell_x4 + offset.Pos().Y()) * this->max_range_;
+//    end4.z = (ell_y4 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end4 = (axis * this->max_range_) + offset.pos;
 //
 //  }
@@ -932,21 +939,21 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    //       Therefore we need to map the y-axis of the ellipse to the Ray-z-axis and the x-axis of the ellipse to the
 //    //       -Ray-y-axis.
 //
-//    end1.x = (1.0 + offset.pos.x);
-//    end1.y = (-ell_x1 + offset.pos.y);
-//    end1.z = (ell_y1 + offset.pos.z);
+//    end1.x = (1.0 + offset.Pos().X());
+//    end1.y = (-ell_x1 + offset.Pos().Y());
+//    end1.z = (ell_y1 + offset.Pos().Z());
 //
-//    end2.x = (1.0 + offset.pos.x);
-//    end2.y = (-ell_x2 + offset.pos.y);
-//    end2.z = (ell_y2 + offset.pos.z);
+//    end2.x = (1.0 + offset.Pos().X());
+//    end2.y = (-ell_x2 + offset.Pos().Y());
+//    end2.z = (ell_y2 + offset.Pos().Z());
 //
-//    end3.x = (1.0 + offset.pos.x);
-//    end3.y = (-ell_x3 + offset.pos.y);
-//    end3.z = (ell_y3 + offset.pos.z);
+//    end3.x = (1.0 + offset.Pos().X());
+//    end3.y = (-ell_x3 + offset.Pos().Y());
+//    end3.z = (ell_y3 + offset.Pos().Z());
 //
-//    end4.x = (1.0 + offset.pos.x);
-//    end4.y = (-ell_x4 + offset.pos.y);
-//    end4.z = (ell_y4 + offset.pos.z);
+//    end4.x = (1.0 + offset.Pos().X());
+//    end4.y = (-ell_x4 + offset.Pos().Y());
+//    end4.z = (ell_y4 + offset.Pos().Z());
 //    double beta1 = (atan2(end1.y - start.y, end1.x - start.x));
 //    double beta2 = (atan2(end2.y - start.y, end2.x - start.x));
 //    double beta3 = (atan2(end3.y - start.y, end3.x - start.x));
@@ -956,32 +963,32 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    double alpha3 = (atan2(end3.z - start.z, end3.x - start.x));
 //    double alpha4 = (atan2(end4.z - start.z, end4.x - start.x));
 //
-//    end1.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end1.y = (-ell_x1 + offset.pos.y) * this->max_range_;
-//    end1.z = (ell_y1 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end1.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end1.y = (-ell_x1 + offset.Pos().Y()) * this->max_range_;
+//    end1.z = (ell_y1 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end1 = (axis * this->max_range_) + offset.pos;
 //
-//    end2.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end2.y = (-ell_x2 + offset.pos.y) * this->max_range_;
-//    end2.z = (ell_y2 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end2.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end2.y = (-ell_x2 + offset.Pos().Y()) * this->max_range_;
+//    end2.z = (ell_y2 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end2 = (axis * this->max_range_) + offset.pos;
 //
-//    end3.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end3.y = (-ell_x3 + offset.pos.y) * this->max_range_;
-//    end3.z = (ell_y3 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end3.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end3.y = (-ell_x3 + offset.Pos().Y()) * this->max_range_;
+//    end3.z = (ell_y3 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end3 = (axis * this->max_range_) + offset.pos;
 //
-//    end4.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end4.y = (-ell_x4 + offset.pos.y) * this->max_range_;
-//    end4.z = (ell_y4 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end4.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end4.y = (-ell_x4 + offset.Pos().Y()) * this->max_range_;
+//    end4.z = (ell_y4 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end4 = (axis * this->max_range_) + offset.pos;
 //    std::string parent_name = this->parent_ray_sensor_->ParentName();
 //
@@ -1077,21 +1084,21 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    //       Therefore we need to map the y-axis of the ellipse to the Ray-z-axis and the x-axis of the ellipse to the
 //    //       -Ray-y-axis.
 //
-//    end1.x = (1.0 + offset.pos.x);
-//    end1.y = (-ell_x1 + offset.pos.y);
-//    end1.z = (ell_y1 + offset.pos.z);
+//    end1.x = (1.0 + offset.Pos().X());
+//    end1.y = (-ell_x1 + offset.Pos().Y());
+//    end1.z = (ell_y1 + offset.Pos().Z());
 //
-//    end2.x = (1.0 + offset.pos.x);
-//    end2.y = (-ell_x2 + offset.pos.y);
-//    end2.z = (ell_y2 + offset.pos.z);
+//    end2.x = (1.0 + offset.Pos().X());
+//    end2.y = (-ell_x2 + offset.Pos().Y());
+//    end2.z = (ell_y2 + offset.Pos().Z());
 //
-//    end3.x = (1.0 + offset.pos.x);
-//    end3.y = (-ell_x3 + offset.pos.y);
-//    end3.z = (ell_y3 + offset.pos.z);
+//    end3.x = (1.0 + offset.Pos().X());
+//    end3.y = (-ell_x3 + offset.Pos().Y());
+//    end3.z = (ell_y3 + offset.Pos().Z());
 //
-//    end4.x = (1.0 + offset.pos.x);
-//    end4.y = (-ell_x4 + offset.pos.y);
-//    end4.z = (ell_y4 + offset.pos.z);
+//    end4.x = (1.0 + offset.Pos().X());
+//    end4.y = (-ell_x4 + offset.Pos().Y());
+//    end4.z = (ell_y4 + offset.Pos().Z());
 //    double beta1 = (atan2(end1.y - start.y, end1.x - start.x));
 //    double beta2 = (atan2(end2.y - start.y, end2.x - start.x));
 //    double beta3 = (atan2(end3.y - start.y, end3.x - start.x));
@@ -1101,32 +1108,32 @@ bool ArtiGazeboLaserLivox::AddRayEllipseShape(double rotation_degrees)
 //    double alpha3 = (atan2(end3.z - start.z, end3.x - start.x));
 //    double alpha4 = (atan2(end4.z - start.z, end4.x - start.x));
 //
-//    end1.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end1.y = (-ell_x1 + offset.pos.y) * this->max_range_;
-//    end1.z = (ell_y1 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end1.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end1.y = (-ell_x1 + offset.Pos().Y()) * this->max_range_;
+//    end1.z = (ell_y1 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha1 + offset_rot.y, beta1 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end1 = (axis * this->max_range_) + offset.pos;
 //
-//    end2.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end2.y = (-ell_x2 + offset.pos.y) * this->max_range_;
-//    end2.z = (ell_y2 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end2.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end2.y = (-ell_x2 + offset.Pos().Y()) * this->max_range_;
+//    end2.z = (ell_y2 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha2 + offset_rot.y, beta2 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end2 = (axis * this->max_range_) + offset.pos;
 //
-//    end3.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end3.y = (-ell_x3 + offset.pos.y) * this->max_range_;
-//    end3.z = (ell_y3 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end3.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end3.y = (-ell_x3 + offset.Pos().Y()) * this->max_range_;
+//    end3.z = (ell_y3 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha3 + offset_rot.y, beta3 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end3 = (axis * this->max_range_) + offset.pos;
 //
-//    end4.x = (1.0 + offset.pos.x) * this->max_range_;
-//    end4.y = (-ell_x4 + offset.pos.y) * this->max_range_;
-//    end4.z = (ell_y4 + offset.pos.z) * this->max_range_;
-//    ray.SetFromEuler(math::Vector3(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
-//    axis = offset.rot * ray * math::Vector3(1.0, 0.0, 0.0);
+//    end4.x = (1.0 + offset.Pos().X()) * this->max_range_;
+//    end4.y = (-ell_x4 + offset.Pos().Y()) * this->max_range_;
+//    end4.z = (ell_y4 + offset.Pos().Z()) * this->max_range_;
+//    ray.SetFromEuler(ignition::math::Vector3d(0.0 + offset_rot.x, -alpha4 + offset_rot.y, beta4 + offset_rot.z));
+//    axis = offset.rot * ray * ignition::math::Vector3d(1.0, 0.0, 0.0);
 //    end4 = (axis * this->max_range_) + offset.pos;
 //    std::string parent_name = this->parent_ray_sensor_->ParentName();
 //
