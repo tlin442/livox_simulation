@@ -33,3 +33,6 @@ to see.
 - noise_stddev: 0.01
 - topic_prefix: livox_lidar/
 - rotation_increment: 0.1 // rotation_increment of every frame
+- fov: 70.4 // Circular FOV of the sensor
+- stacked_lasers: 6 // Number of stacked lasers. 6 for Livox Avia
+- stack_offset: 0.02 //Offset of the laser beams at a distance of 1m
