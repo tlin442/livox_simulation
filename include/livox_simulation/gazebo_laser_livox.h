@@ -62,6 +62,9 @@ private:
   std::string frame_name_;
   double update_rate_;
   double update_period_;
+  double fov_;
+  double stacked_lasers_;
+  double stack_offset_;
   common::Time last_update_time_;
   std::string robot_namespace_;
   ros::CallbackQueue laser_queue_;

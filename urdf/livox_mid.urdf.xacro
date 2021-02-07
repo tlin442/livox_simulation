@@ -11,7 +11,7 @@
   </xacro:macro>
 
 
-  <xacro:macro name="Livox_Mid_gazebo_sensor" params="visualize:=True update_rate:=10 min_range:=0.0 max_range:=30.0 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 topic_prefix:=livox_lidar/ name:=livox samples:=500 num_double_ellipses:=5 rotation_increment:=0.1">
+  <xacro:macro name="Livox_Mid_gazebo_sensor" params="visualize:=True fov:=15.0 update_rate:=10 min_range:=0.0 max_range:=30.0 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 topic_prefix:=livox_lidar/ name:=livox samples:=500 num_double_ellipses:=5 rotation_increment:=0.1">
     <gazebo reference="${name}">
       <sensor type="ray" name="laser_${name}">
         <pose>0 0 0 0 0 0</pose>
@@ -54,6 +54,7 @@
           <minRange>${min_range}</minRange>
           <maxRange>${max_range}</maxRange>
           <rotationIncrement>${rotation_increment}</rotationIncrement>
+          <fov>${fov}</fov>
           <interpolationPoints>10</interpolationPoints>
           <maxInterpolationDistance>2.0</maxInterpolationDistance>
         </plugin>
@@ -62,7 +63,7 @@
   </xacro:macro>
 
   <!-- ============================================= Livox_Mid40 macro ============================================= -->
-  <xacro:macro name="Livox_Mid40" params="visualize:=True update_rate:=10 min_range:=0.0 max_range:=30.0 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 topic_prefix:=livox_lidar/ name:=livox samples:=500 num_double_ellipses:=5 rotation_increment:=0.1">
+  <xacro:macro name="Livox_Mid40" params="visualize:=True fov:=70.4 update_rate:=50 min_range:=0.0 max_range:=260.0 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 topic_prefix:=livox_lidar/ name:=livox samples:=200 num_double_ellipses:=2 rotation_increment:=0.3">
     <link name="${name}_base">
       <xacro:null_inertial/>
       <!-- <inertial>
@@ -96,7 +97,7 @@
       <origin rpy="0 0 0" xyz="0.049 0.0 0.0457"/>
     </joint>
 
-    <xacro:Livox_Mid_gazebo_sensor name="${name}" visualize="${visualize}" min_range="${min_range}" max_range="${max_range}" resolution="${resolution}" samples="${samples}" num_double_ellipses="${num_double_ellipses}" update_rate="${update_rate}" noise_mean="${noise_mean}" noise_stddev="${noise_stddev}" topic_prefix="${topic_prefix}" rotation_increment="${rotation_increment}"/>
+    <xacro:Livox_Mid_gazebo_sensor name="${name}" visualize="${visualize}" min_range="${min_range}" max_range="${max_range}" resolution="${resolution}" samples="${samples}" num_double_ellipses="${num_double_ellipses}" update_rate="${update_rate}" noise_mean="${noise_mean}" noise_stddev="${noise_stddev}" topic_prefix="${topic_prefix}" rotation_increment="${rotation_increment}" fov="${fov}"/>
   </xacro:macro>
 
   <!-- ============================================= Livox_Mid100 macro ============================================= -->
